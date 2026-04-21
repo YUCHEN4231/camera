@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>鏡頭偵測範例</title>
+</head>
+<body>
+    <h1>網頁攝影機測試</h1>
+    <video id="video" width="640" height="480" autoplay playsinline></video>
+    <br>
+    <button id="startBtn">開啟鏡頭</button>
+
+    <script>
+        const video = document.getElementById('video');
+        const startBtn = document.getElementById('startBtn');
+
+        startBtn.addEventListener('click', async () => {
+            try {
+                // 請求攝像頭權限
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: true, 
+                    audio: false 
+                });
+                
+                // 將影像串流指定給 video 標籤
+                video.srcObject = stream;
+            } catch (err) {
+                console.error("無法存取鏡頭: ", err);
+                alert("請確保已授權瀏覽器存取鏡頭。");
+            }
+        });
+    </script>
+</body>
+</html>

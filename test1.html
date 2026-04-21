@@ -2,33 +2,113 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>鏡頭偵測範例</title>
+    <title>67 體感挑戰賽</title>
+    <style>
+        body { text-align: center; font-family: sans-serif; background: #222; color: #fff; }
+        #video, #canvas { position: absolute; left: 0; top: 0; width: 640px; height: 480px; }
+        #overlay { position: relative; z-index: 10; margin-top: 500px; }
+        .stats { font-size: 24px; margin: 10px; }
+    </style>
 </head>
 <body>
-    <h1>網頁攝影機測試</h1>
-    <video id="video" width="640" height="480" autoplay playsinline></video>
-    <br>
-    <button id="startBtn">開啟鏡頭</button>
+    <h1>67 體感挑戰賽</h1>
+    <video id="video" playsinline></video>
+    <canvas id="canvas"></canvas>
+    
+    <div id="overlay">
+        <button id="startBtn" style="padding: 15px 30px; font-size: 20px;">開始遊戲</button>
+        <div class="stats" id="info">準備好了嗎？</div>
+        <div class="stats" id="leaderboard"></div>
+    </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js" crossorigin="anonymous"></script>
     <script>
-        const video = document.getElementById('video');
-        const startBtn = document.getElementById('startBtn');
+        // 遊戲變數
+        let gameState = 'WAIT'; // WAIT, COUNTDOWN, PLAYING, GAMEOVER
+        let score = 0;
+        let timeLeft = 20;
+        let leaderboard = JSON.parse(localStorage.getItem('67_leaderboard')) || [];
+        
+        // 動作偵測變數
+        let startX = null;
+        let isMovingOut = false; // 是否正在往外擺動
 
-        startBtn.addEventListener('click', async () => {
-            try {
-                // 請求攝像頭權限
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: true, 
-                    audio: false 
-                });
-                
-                // 將影像串流指定給 video 標籤
-                video.srcObject = stream;
-            } catch (err) {
-                console.error("無法存取鏡頭: ", err);
-                alert("請確保已授權瀏覽器存取鏡頭。");
+        // DOM 元素
+        const startBtn = document.getElementById('startBtn');
+        const infoDiv = document.getElementById('info');
+
+        // 初始化 MediaPipe
+        async function setupCamera() {
+            const video = document.getElementById('video');
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+            video.play();
+        }
+
+        startBtn.onclick = async () => {
+            startBtn.style.display = 'none';
+            await runCountdown();
+        };
+
+        async function runCountdown() {
+            gameState = 'COUNTDOWN';
+            for(let i=3; i>0; i--) {
+                infoDiv.innerText = `倒數：${i}`;
+                await new Promise(r => setTimeout(r, 1000));
             }
-        });
+            startGame();
+        }
+
+        function startGame() {
+            gameState = 'PLAYING';
+            score = 0;
+            timeLeft = 20;
+            const timer = setInterval(() => {
+                timeLeft--;
+                infoDiv.innerText = `剩餘時間: ${timeLeft}秒 | 分數: ${score}`;
+                if(timeLeft <= 0) {
+                    clearInterval(timer);
+                    endGame();
+                }
+            }, 1000);
+        }
+
+        function endGame() {
+            gameState = 'GAMEOVER';
+            leaderboard.push(score);
+            leaderboard.sort((a,b) => b-a);
+            leaderboard = leaderboard.slice(0, 5); // 只存前五名
+            localStorage.setItem('67_leaderboard', JSON.stringify(leaderboard));
+            
+            infoDiv.innerText = `遊戲結束！你的分數: ${score}`;
+            document.getElementById('leaderboard').innerText = `排行榜: ${leaderboard.join(', ')}`;
+            startBtn.style.display = 'block';
+            startBtn.innerText = '重新開始';
+        }
+
+        // 偵測手部動作 (簡化版：偵測左右位移)
+        function processHandMovement(landmarks) {
+            if (gameState !== 'PLAYING') return;
+
+            // 取雙手食指的中點 x 座標
+            const avgX = (landmarks[8].x + landmarks[5].x) / 2; // 這裡假設簡易偵測
+
+            if(startX === null) startX = avgX;
+
+            const delta = Math.abs(avgX - startX);
+
+            // 邏輯：位移大於 0.2 (畫面比例) 視為一次動作擺動
+            if (delta > 0.2 && !isMovingOut) {
+                isMovingOut = true;
+            } else if (delta < 0.05 && isMovingOut) {
+                // 回到中心，視為完成一次來回
+                score++;
+                isMovingOut = false;
+            }
+        }
+
+        setupCamera();
+        // 之後接入 MediaPipe 的 onResults 回呼函數即可
     </script>
 </body>
 </html>
